@@ -1,0 +1,875 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Kualitas Udara</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --accent-color: #3498db;
+            --good-color: #2ecc71;
+            --moderate-color: #f1c40f;
+            --unhealthy-color: #e74c3c;
+            --very-unhealthy-color: #8e44ad;
+        }
+
+        .recommendation-box {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            border-left: 5px solid var(--accent-color);
+        }
+
+        .recommendation-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: var(--primary-color);
+        }
+
+        .recommendation-content {
+            color: var(--secondary-color);
+        }
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f6fa;
+            color: var(--primary-color);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .dashboard-header {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            margin: 0;
+            font-size: 2.5em;
+        }
+
+        .aqi-legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .legend-item {
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            color: white;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+
+        .legend-item:hover {
+            transform: translateY(-3px);
+        }
+
+        .good { background-color: var(--good-color); }
+        .moderate { background-color: var(--moderate-color); }
+        .unhealthy { background-color: var(--unhealthy-color); }
+        .very-unhealthy { background-color: var(--very-unhealthy-color); }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        #map {
+            height: 500px;
+            width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .input-container {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--secondary-color);
+            font-weight: bold;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .input-group input:focus {
+            border-color: var(--accent-color);
+            outline: none;
+        }
+
+        .button-group {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        button[onclick="getPrediction()"] {
+            background-color: var(--accent-color);
+            color: white;
+        }
+
+        button[onclick="clearForm()"] {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .prediction-result-container {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .recommendation-section {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: white;
+        }
+
+        .recommendation-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--accent-color);
+        }
+
+        .recommendation-list {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .recommendation-list li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .recommendation-list li:before {
+            content: "•";
+            position: absolute;
+            left: 8px;
+            color: var(--accent-color);
+        }
+
+        .health-impact {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .health-impact-title {
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .input-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="dashboard-header">
+            <h1>Dashboard Kualitas Udara</h1>
+        </div>
+
+        <div class="aqi-legend">
+            <div class="legend-item good">
+                <div>Kategori 0: Bagus 
+                    <br>(Good)</div>
+                <small>AQI: 0-50</small>
+            </div>
+            <div class="legend-item moderate">
+                <div>Kategori 1: Sedang 
+                    <br>(Moderate)</div>
+                <small>AQI: 51-100</small>
+            </div>
+            <div class="legend-item unhealthy">
+                <div>Kategori 2: Tidak Sehat (Unhealthy)</div>
+                <small>AQI: 101-250</small>
+            </div>
+            <div class="legend-item very-unhealthy">
+                <div>Kategori 3: Sangat Tidak Sehat (Very Unhealthy)</div>
+                <small>AQI: 251-500</small>
+            </div>
+        </div>
+        
+        <div id="map"></div>
+        
+        <div class="grid">
+            <div class="chart-container">
+                <h2>Data Lampau AQI</h2>
+                <canvas id="historicalChart"></canvas>
+                <h2>Data lampau ini digunakan untuk acuan membuat prediksi</h2>
+            </div>
+            <div class="chart-container">
+                <h2>Prediksi AQI (5 Hari Kedepan)</h2>
+                <canvas id="forecastChart"></canvas>
+                <div id="recommendationBox" class="recommendation-box">
+                    <div class="recommendation-title">Rekomendasi Kesehatan:</div>
+                    <div id="recommendationContent" class="recommendation-content"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h2>Prediksi Manual</h2>
+            <form id="predictionForm">
+                <div class="input-container">
+                    <div class="input-group">
+                        <label for="so2">SO2 (Polusi Belerang):</label>
+                        <input type="number" id="so2" name="so2" step="0.001" placeholder="0.004">
+                    </div>
+                    <div class="input-group">
+                        <label for="no2">NO2 (Polusi Kendaraan):</label>
+                        <input type="number" id="no2" name="no2" step="0.001" placeholder="0.054">
+                    </div>
+                    <div class="input-group">
+                        <label for="o3">O3 (Kandungan Ozon):</label>
+                        <input type="number" id="o3" name="o3" step="0.001" placeholder="0.003">
+                    </div>
+                    <div class="input-group">
+                        <label for="co">CO (Asap Rokok):</label>
+                        <input type="number" id="co" name="co" step="0.001" placeholder="0.9925">
+                    </div>
+                    <div class="input-group">
+                        <label for="pm10">PM10 (Debu Kasar):</label>
+                        <input type="number" id="pm10" name="pm10" step="0.001" placeholder="81.667">
+                    </div>
+                    <div class="input-group">
+                        <label for="pm25">PM2.5 (Debu Halus):</label>
+                        <input type="number" id="pm25" name="pm25" step="0.001" placeholder="58.938">
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button type="button" onclick="getPrediction()">Prediksi</button>
+                    <button type="button" onclick="clearForm()">Hapus</button>
+                </div>
+            </form>
+            <div class="prediction-result-container">
+                <h3 id="predictionResult"></h3>
+                <div id="recommendationSection" class="recommendation-section" style="display: none;">
+                    <div class="recommendation-header">Rekomendasi Kesehatan:</div>
+                    <ul id="recommendationList" class="recommendation-list"></ul>
+                    <div class="health-impact">
+                        <div class="health-impact-title">Dampak Kesehatan:</div>
+                        <div id="healthImpact"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([37.5650337, 126.809332], 10);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Initialize charts
+        let historicalChart = null;
+        let forecastChart = null;
+
+        function getDetailedRecommendations(category) {
+            const recommendations = {
+                'Good': {
+                    recommendations: [
+                        "Ideal untuk aktivitas luar ruangan",
+                        "Lanjutkan aktivitas normal",
+                        "Nikmati udara segar dengan aman",
+                        "Cocok untuk olahraga outdoor"
+                    ],
+                    impact: "Kualitas udara sangat baik dan aman untuk semua kelompok usia dan kondisi kesehatan."
+                },
+                'Moderate': {
+                    recommendations: [
+                        "Batasi aktivitas luar ruangan yang berkepanjangan",
+                        "Pertimbangkan penggunaan masker jika sensitif",
+                        "Pantau kondisi jika memiliki masalah pernapasan",
+                        "Tutup jendela saat kualitas udara menurun"
+                    ],
+                    impact: "Mungkin menyebabkan gangguan ringan bagi kelompok sensitif seperti penderita asma atau lansia."
+                },
+                'Unhealthy': {
+                    recommendations: [
+                        "Gunakan masker N95 saat beraktivitas di luar",
+                        "Kurangi aktivitas luar ruangan",
+                        "Gunakan air purifier di dalam ruangan",
+                        "Pastikan ventilasi ruangan baik",
+                        "Minum banyak air putih"
+                    ],
+                    impact: "Dapat menyebabkan iritasi pernapasan, batuk, dan ketidaknyamanan saat bernapas bagi semua kelompok usia."
+                },
+                'Very Unhealthy': {
+                    recommendations: [
+                        "Hindari semua aktivitas luar ruangan",
+                        "Gunakan masker N95 jika terpaksa keluar",
+                        "Tutup semua jendela rapat-rapat",
+                        "Nyalakan air purifier 24 jam",
+                        "Hubungi dokter jika mengalami gejala gangguan pernapasan",
+                        "Tetap di dalam ruangan ber-AC"
+                    ],
+                    impact: "Resiko serius bagi kesehatan, dapat menyebabkan gangguan pernapasan akut, memperburuk kondisi jantung dan paru-paru."
+                }
+            };
+            return recommendations[category];
+        }
+
+                // Get map data and add markers
+        fetch('/get_map_data')
+        .then(response => response.json())
+        .then(data => {
+            data.forEach(station => {
+                // Create custom icon based on AQI category
+                const getMarkerColor = (category) => {
+                    const colors = {
+                        'Good': '#2ecc71',        // --good-color
+                        'Moderate': '#f1c40f',    // --moderate-color
+                        'Unhealthy': '#e74c3c',   // --unhealthy-color
+                        'Very Unhealthy': '#8e44ad' // --very-unhealthy-color
+                    };
+                    return colors[category] || '#95a5a6'; // Default gray if category not found
+                };
+
+                const createCustomIcon = (category) => {
+                    return L.divIcon({
+                        className: 'custom-marker',
+                        html: `<div style="
+                            background-color: ${getMarkerColor(category)};
+                            width: 24px;
+                            height: 24px;
+                            border-radius: 50%;
+                            border: 2px solid white;
+                            box-shadow: 0 0 4px rgba(0,0,0,0.3);
+                        "></div>`,
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12],
+                        popupAnchor: [0, -12]
+                    });
+                };
+
+                let advice = '';
+                switch (station.category) {
+                    case 'Good':
+                        advice = 'Kualitas udara memuaskan, dan polusi udara menimbulkan sedikit atau tidak ada risiko.';
+                        break;
+                    case 'Moderate':
+                        advice = 'Kualitas udara dapat diterima. Namun, ada sedikit risiko kesehatan bagi sejumlah kecil orang yang sangat sensitif terhadap polusi udara.';
+                        break;
+                    case 'Unhealthy':
+                        advice = 'Setiap orang dapat mulai mengalami efek kesehatan; anggota kelompok sensitif mungkin mengalami efek kesehatan yang lebih serius.';
+                        break;
+                    case 'Very Unhealthy':
+                        advice = 'Peringatan kesehatan: setiap orang dapat mengalami efek kesehatan yang lebih serius.';
+                        break;
+                    default:
+                        advice = 'Data tidak tersedia.';
+                        break;
+                }
+
+                // Create marker with custom icon
+                const marker = L.marker([station.latitude, station.longitude], {
+                    icon: createCustomIcon(station.category)
+                })
+                    .bindPopup(`
+                        <div style="
+                            border-left: 4px solid ${getMarkerColor(station.category)};
+                            padding-left: 10px;
+                        ">
+                            <b>Station ${station.station_code}</b><br>
+                            District: ${station.district}<br>
+                            AQI: ${station.aqi}<br>
+                            Category: ${station.category}<br>
+                            <b>Advice:</b> ${advice}
+                        </div>
+                    `)
+                    .addTo(map);
+
+                marker.on('click', () => {
+                    updateCharts(station.station_code);
+                });
+            });
+
+            // Initialize charts with first station
+            if (data.length > 0) {
+                updateCharts(data[0].station_code);
+            }
+        });
+
+
+        function updateCharts(stationCode) {
+    // Update historical chart
+    fetch(`/get_historical/${stationCode}`)
+        .then(response => response.json())
+        .then(data => {
+            if (historicalChart) {
+                historicalChart.destroy();
+            }
+
+            // Fungsi untuk mendapatkan warna berdasarkan nilai AQI
+            const getPointColor = (value) => {
+                if (value <= 50) return 'rgba(46, 204, 113, 1)'; // Good
+                if (value <= 100) return 'rgba(241, 196, 15, 1)'; // Moderate
+                if (value <= 250) return 'rgba(231, 76, 60, 1)'; // Unhealthy
+                return 'rgba(142, 68, 173, 1)'; // Very Unhealthy
+            };
+
+            // Fungsi untuk mendapatkan kategori berdasarkan nilai AQI
+            const getCategory = (value) => {
+                if (value <= 50) return 'Baik';
+                if (value <= 100) return 'Sedang';
+                if (value <= 250) return 'Tidak Sehat';
+                return 'Sangat Tidak Sehat';
+            };
+            
+            historicalChart = new Chart(document.getElementById('historicalChart'), {
+                type: 'line',
+                data: {
+                    labels: data.dates,
+                    datasets: [{
+                        label: 'Nilai AQI',
+                        data: data.aqi,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1,
+                        pointBackgroundColor: data.aqi.map(value => getPointColor(value)),
+                        pointBorderColor: data.aqi.map(value => getPointColor(value)),
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Riwayat Kualitas Udara (AQI)',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    const category = getCategory(value);
+                                    return [
+                                        `Nilai AQI: ${value.toFixed(1)}`,
+                                        `Kategori: ${category}`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Nilai AQI (Air Quality Index)',
+                                font: {
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value + ' AQI';
+                                }
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Tanggal',
+                                font: {
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Tambahkan penjelasan di bawah grafik
+            const chartContainer = document.querySelector('.chart-container');
+            const explanationDiv = document.createElement('div');
+            explanationDiv.className = 'historical-explanation';
+            explanationDiv.innerHTML = `
+                <style>
+                    .historical-explanation {
+                        margin-top: 20px;
+                        padding: 15px;
+                        background-color: #f8f9fa;
+                        border-radius: 8px;
+                        font-size: 14px;
+                    }
+                    .historical-explanation h4 {
+                        margin: 0 0 10px 0;
+                        color: #2c3e50;
+                    }
+                    .category-legend {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 10px;
+                        margin-top: 10px;
+                    }
+                    .category-item {
+                        display: flex;
+                        align-items: center;
+                        gap: 5px;
+                    }
+                    .color-box {
+                        width: 15px;
+                        height: 15px;
+                        border-radius: 3px;
+                    }
+                </style>
+                <h4>Panduan Membaca Grafik:</h4>
+                <ul>
+                    <li>Grafik menunjukkan perubahan kualitas udara dari waktu ke waktu</li>
+                    <li>Semakin tinggi nilai AQI, semakin buruk kualitas udara</li>
+                    <li>Warna titik menunjukkan kategori kualitas udara</li>
+                </ul>
+                <div class="category-legend">
+                    <div class="category-item">
+                        <div class="color-box" style="background: rgba(46, 204, 113, 1)"></div>
+                        <span>Baik (0-50)</span>
+                    </div>
+                    <div class="category-item">
+                        <div class="color-box" style="background: rgba(241, 196, 15, 1)"></div>
+                        <span>Sedang (51-100)</span>
+                    </div>
+                    <div class="category-item">
+                        <div class="color-box" style="background: rgba(231, 76, 60, 1)"></div>
+                        <span>Tidak Sehat (101-250)</span>
+                    </div>
+                    <div class="category-item">
+                        <div class="color-box" style="background: rgba(142, 68, 173, 1)"></div>
+                        <span>Sangat Tidak Sehat (>250)</span>
+                    </div>
+                </div>
+            `;
+            chartContainer.appendChild(explanationDiv);
+        });
+
+            // Update forecast chart
+            fetch(`/get_forecast/${stationCode}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (forecastChart) {
+                        forecastChart.destroy();
+                    }
+                    
+                    forecastChart = new Chart(document.getElementById('forecastChart'), {
+                        type: 'line',
+                        data: {
+                            labels: data.dates,
+                            datasets: [{
+                                label: 'AQI Category',
+                                data: data.values,
+                                borderColor: 'rgb(255, 99, 132)',
+                                tension: 0.1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 3,
+                                    ticks: {
+                                        stepSize: 1,
+                                        callback: function(value) {
+                                            const labels = ['Good', 'Moderate', 'Unhealthy', 'Very Unhealthy'];
+                                            return `${value} - ${labels[value]}`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    // Update chart recommendations
+                    const latestValue = data.values[data.values.length - 1];
+                    const categories = ['Good', 'Moderate', 'Unhealthy', 'Very Unhealthy'];
+                    const recommendations = getDetailedRecommendations(categories[latestValue]);
+                    
+                    const chartRecommendationContent = document.getElementById('chartRecommendationContent');
+                    chartRecommendationContent.innerHTML = `
+                        <ul class="recommendation-list">
+                            ${recommendations.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                        </ul>
+                        <div class="health-impact">
+                            <div class="health-impact-title">Dampak Kesehatan:</div>
+                            <div>${recommendations.impact}</div>
+                        </div>
+                    `;
+                });
+        }
+
+        function getPrediction() {
+            const form = document.getElementById('predictionForm');
+            const formData = new FormData(form);
+            const data = {
+                so2: parseFloat(formData.get('so2')),
+                no2: parseFloat(formData.get('no2')),
+                o3: parseFloat(formData.get('o3')),
+                co: parseFloat(formData.get('co')),
+                pm10: parseFloat(formData.get('pm10')),
+                pm25: parseFloat(formData.get('pm25'))
+            };
+            
+            fetch('/predict_manual', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                const resultElement = document.getElementById('predictionResult');
+                resultElement.innerText = `Predicted AQI: ${result.aqi.toFixed(2)} (Category ${result.category})`;
+                resultElement.style.backgroundColor = getCategoryColor(result.category);
+                resultElement.style.color = 'white';
+                resultElement.style.padding = '15px';
+                resultElement.style.borderRadius = '5px';
+
+                // Show and update recommendations
+                const recommendationSection = document.getElementById('recommendationSection');
+                recommendationSection.style.display = 'block';
+                
+                const recommendations = getDetailedRecommendations(result.category);
+                
+                // Update recommendation list
+                const recommendationList = document.getElementById('recommendationList');
+                recommendationList.innerHTML = recommendations.recommendations
+                    .map(rec => `<li>${rec}</li>`)
+                    .join('');
+                
+                // Update health impact
+                const healthImpact = document.getElementById('healthImpact');
+                healthImpact.innerText = recommendations.impact;
+
+                // Update container border color
+                const container = document.querySelector('.prediction-result-container');
+                container.style.borderLeft = `5px solid ${getCategoryColor(result.category)}`;
+            });
+        }
+
+        function clearForm() {
+            const form = document.getElementById('predictionForm');
+            form.reset();
+            const resultElement = document.getElementById('predictionResult');
+            resultElement.innerText = '';
+            resultElement.style.backgroundColor = '';
+            resultElement.style.color = '';
+            resultElement.style.padding = '';
+            resultElement.style.borderRadius = '';
+            
+            // Hide recommendation section
+            const recommendationSection = document.getElementById('recommendationSection');
+            recommendationSection.style.display = 'none';
+            
+            // Reset container styling
+            const container = document.querySelector('.prediction-result-container');
+            container.style.borderLeft = 'none';
+        }
+
+        function getCategoryColor(category) {
+            const colors = {
+                'Good': 'var(--good-color)',
+                'Moderate': 'var(--moderate-color)',
+                'Unhealthy': 'var(--unhealthy-color)',
+                'Very Unhealthy': 'var(--very-unhealthy-color)'
+            };
+            return colors[category] || '#95a5a6';
+        }
+        function getRecommendation(category) {
+            const recommendations = {
+                0: "Kualitas udara sangat baik! Ideal untuk aktivitas di luar ruangan. Nikmati kegiatan outdoor Anda dengan nyaman.",
+                1: "Kualitas udara cukup baik. Pertimbangkan untuk:\n- Mengurangi aktivitas luar yang berkepanjangan\n- Membawa masker jika diperlukan\n- Memantau kondisi jika Anda memiliki masalah pernapasan.",
+                2: "Kualitas udara tidak sehat! Disarankan untuk:\n- Membatasi aktivitas di luar ruangan\n- Menggunakan masker saat keluar\n- Menutup jendela rumah\n- Menggunakan air purifier jika ada",
+                3: "Kualitas udara sangat tidak sehat! Anda harus:\n- Hindari aktivitas luar ruangan\n- Gunakan masker N95 jika terpaksa keluar\n- Nyalakan air purifier\n- Hubungi dokter jika mengalami gangguan pernapasan"
+            };
+            return recommendations[category];
+        }
+
+        function updateCharts(stationCode) {
+            // Update historical chart
+            fetch(`/get_historical/${stationCode}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (historicalChart) {
+                        historicalChart.destroy();
+                    }
+                    
+                    historicalChart = new Chart(document.getElementById('historicalChart'), {
+                        type: 'line',
+                        data: {
+                            labels: data.dates,
+                            datasets: [{
+                                label: 'Historical AQI',
+                                data: data.aqi,
+                                borderColor: 'rgb(75, 192, 192)',
+                                tension: 0.1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: {
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                });
+    
+            // Update forecast chart
+            fetch(`/get_forecast/${stationCode}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (forecastChart) {
+                        forecastChart.destroy();
+                    }
+                    
+                    forecastChart = new Chart(document.getElementById('forecastChart'), {
+                        type: 'line',
+                        data: {
+                            labels: data.dates,
+                            datasets: [{
+                                label: 'AQI Category',
+                                data: data.values,
+                                borderColor: 'rgb(255, 99, 132)',
+                                tension: 0.1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 3,
+                                    ticks: {
+                                        stepSize: 1,
+                                        callback: function(value) {
+                                            const labels = ['Good', 'Moderate', 'Unhealthy', 'Very Unhealthy'];
+                                            return `${value} - ${labels[value]}`;
+                                        }
+                                    }
+                                }
+                            },
+                            onChange: (context) => {
+                                // Update recommendation based on the latest predicted value
+                                const latestValue = data.values[data.values.length - 1];
+                                document.getElementById('recommendationContent').innerText = getRecommendation(latestValue);
+                                
+                                // Update recommendation box border color
+                                const colors = ['var(--good-color)', 'var(--moderate-color)', 'var(--unhealthy-color)', 'var(--very-unhealthy-color)'];
+                                document.getElementById('recommendationBox').style.borderLeftColor = colors[latestValue];
+                            }
+                        }
+                    });
+                    
+                    // Set initial recommendation based on the latest predicted value
+                    const latestValue = data.values[data.values.length - 1];
+                    document.getElementById('recommendationContent').innerText = getRecommendation(latestValue);
+                    
+                    // Set initial recommendation box border color
+                    const colors = ['var(--good-color)', 'var(--moderate-color)', 'var(--unhealthy-color)', 'var(--very-unhealthy-color)'];
+                    document.getElementById('recommendationBox').style.borderLeftColor = colors[latestValue];
+                });
+        }
+    </script>
+</body>
+</html>
